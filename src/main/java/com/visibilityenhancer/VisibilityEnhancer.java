@@ -3,13 +3,17 @@ package com.visibilityenhancer;
 import com.google.inject.Provides;
 import java.awt.Color;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.WeakHashMap;
 import javax.inject.Inject;
 import net.runelite.api.Client;
 import net.runelite.api.Model;
 import net.runelite.api.Player;
+import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.BeforeRender;
+import net.runelite.api.events.GameTick;
 import net.runelite.api.events.PlayerDespawned;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -30,21 +34,107 @@ public class VisibilityEnhancer extends Plugin
 	private VisibilityEnhancerConfig config;
 
 	private final Map<Model, SavedModelState> selfCache = new WeakHashMap<>();
+	private final Set<Player> ghostedPlayers = new HashSet<>();
 
 	@Override
-	protected void shutDown() throws Exception
+	protected void shutDown()
 	{
+		Player local = client.getLocalPlayer();
+		if (local != null)
+		{
+			restoreSelf(local);
+		}
+
 		selfCache.clear();
+		ghostedPlayers.clear();
 	}
 
 	@Subscribe
 	public void onPlayerDespawned(PlayerDespawned event)
 	{
-		Model model = event.getPlayer().getModel();
+		Player player = event.getPlayer();
+		if (player == null)
+		{
+			return;
+		}
+
+		Model model = player.getModel();
 		if (model != null)
 		{
 			selfCache.remove(model);
 		}
+
+		ghostedPlayers.remove(player);
+	}
+
+	@Subscribe
+	public void onGameTick(GameTick event)
+	{
+		Player local = client.getLocalPlayer();
+		if (local == null)
+		{
+			ghostedPlayers.clear();
+			return;
+		}
+
+		int playerOpacity = config.playerOpacity();
+		int proximityRange = config.proximityRange();
+		boolean ignoreFriends = config.ignoreFriends();
+
+		if (playerOpacity >= 100)
+		{
+			restoreTrackedPlayers();
+			return;
+		}
+
+		WorldPoint localPoint = local.getWorldLocation();
+		if (localPoint == null)
+		{
+			restoreTrackedPlayers();
+			return;
+		}
+
+		Set<Player> playersInRange = new HashSet<>();
+
+		for (Player player : client.getPlayers())
+		{
+			if (player == null || player == local)
+			{
+				continue;
+			}
+
+			if (ignoreFriends && isFriend(player))
+			{
+				if (ghostedPlayers.contains(player))
+				{
+					restoreOtherOpacity(player);
+				}
+				continue;
+			}
+
+			WorldPoint playerPoint = player.getWorldLocation();
+			if (playerPoint == null)
+			{
+				continue;
+			}
+
+			if (localPoint.distanceTo(playerPoint) <= proximityRange)
+			{
+				playersInRange.add(player);
+				applyOtherOpacity(player, playerOpacity);
+			}
+		}
+
+		Set<Player> noLongerGhosted = new HashSet<>(ghostedPlayers);
+		noLongerGhosted.removeAll(playersInRange);
+
+		for (Player player : noLongerGhosted)
+		{
+			restoreOtherOpacity(player);
+		}
+
+		ghostedPlayers.clear();
+		ghostedPlayers.addAll(playersInRange);
 	}
 
 	@Subscribe
@@ -56,33 +146,20 @@ public class VisibilityEnhancer extends Plugin
 			return;
 		}
 
-		handleSelf(local);
+		int selfOpacity = config.selfOpacity();
+		boolean selfSilhouette = config.selfSilhouette();
 
-		for (Player player : client.getPlayers())
+		if (selfOpacity < 100 || selfSilhouette)
 		{
-			if (player == null || player == local)
-			{
-				continue;
-			}
-
-			if (config.ignoreFriends() && (player.isFriend() || client.isFriended(player.getName(), false)))
-			{
-				restoreOtherOpacity(player);
-				continue;
-			}
-
-			if (local.getWorldLocation().distanceTo(player.getWorldLocation()) <= config.proximityRange())
-			{
-				applyOtherOpacity(player, config.playerOpacity());
-			}
-			else
-			{
-				restoreOtherOpacity(player);
-			}
+			handleSelf(local, selfOpacity, selfSilhouette, config.silhouetteColor());
+		}
+		else
+		{
+			restoreSelf(local);
 		}
 	}
 
-	private void handleSelf(Player local)
+	private void handleSelf(Player local, int selfOpacity, boolean selfSilhouette, Color silhouetteColor)
 	{
 		Model model = local.getModel();
 		if (model == null)
@@ -90,6 +167,41 @@ public class VisibilityEnhancer extends Plugin
 			return;
 		}
 
+		cacheSelfState(model);
+
+		if (selfOpacity < 100)
+		{
+			applyModelOpacity(model, selfOpacity);
+		}
+		else
+		{
+			restoreSelfOpacity(model);
+		}
+
+		if (selfSilhouette)
+		{
+			applyModelSilhouette(model, silhouetteColor);
+		}
+		else
+		{
+			restoreSelfColors(model);
+		}
+	}
+
+	private void restoreSelf(Player local)
+	{
+		Model model = local.getModel();
+		if (model == null)
+		{
+			return;
+		}
+
+		restoreSelfOpacity(model);
+		restoreSelfColors(model);
+	}
+
+	private void cacheSelfState(Model model)
+	{
 		if (!selfCache.containsKey(model))
 		{
 			selfCache.put(model, new SavedModelState(
@@ -101,17 +213,12 @@ public class VisibilityEnhancer extends Plugin
 					copy(model.getFaceTextures())
 			));
 		}
+	}
 
-		applyModelOpacity(model, config.selfOpacity());
-
-		if (config.selfSilhouette())
-		{
-			applyModelSilhouette(model, config.silhouetteColor());
-		}
-		else
-		{
-			restoreSelfColors(model);
-		}
+	private boolean isFriend(Player player)
+	{
+		String name = player.getName();
+		return player.isFriend() || (name != null && client.isFriended(name, false));
 	}
 
 	private void applyOtherOpacity(Player player, int opacityPercent)
@@ -122,14 +229,19 @@ public class VisibilityEnhancer extends Plugin
 			return;
 		}
 
-		model = client.applyTransformations(model, null, 0, null, 0);
-
 		byte[] trans = model.getFaceTransparencies();
-		if (trans != null)
+		if (trans == null || trans.length == 0)
 		{
-			int alpha = (int) ((100 - opacityPercent) * 2.55);
-			Arrays.fill(trans, (byte) Math.max(0, Math.min(255, alpha)));
+			return;
 		}
+
+		int alpha = clampAlpha(opacityPercent);
+		if ((trans[0] & 0xFF) == alpha)
+		{
+			return;
+		}
+
+		Arrays.fill(trans, (byte) alpha);
 	}
 
 	private void restoreOtherOpacity(Player player)
@@ -141,47 +253,99 @@ public class VisibilityEnhancer extends Plugin
 		}
 
 		byte[] trans = model.getFaceTransparencies();
-		if (trans != null && trans.length > 0 && (trans[0] & 0xFF) != 0)
+		if (trans == null || trans.length == 0)
 		{
-			Arrays.fill(trans, (byte) 0);
+			return;
 		}
+
+		if ((trans[0] & 0xFF) == 0)
+		{
+			return;
+		}
+
+		Arrays.fill(trans, (byte) 0);
+	}
+
+	private void restoreTrackedPlayers()
+	{
+		for (Player player : ghostedPlayers)
+		{
+			restoreOtherOpacity(player);
+		}
+		ghostedPlayers.clear();
 	}
 
 	private void applyModelOpacity(Model model, int opacityPercent)
 	{
 		byte[] trans = model.getFaceTransparencies();
-		if (trans == null)
+		if (trans == null || trans.length == 0)
 		{
 			return;
 		}
 
-		int alpha = (int) ((100 - opacityPercent) * 2.55);
-		Arrays.fill(trans, (byte) Math.max(0, Math.min(255, alpha)));
+		int alpha = clampAlpha(opacityPercent);
+		if ((trans[0] & 0xFF) == alpha)
+		{
+			return;
+		}
+
+		Arrays.fill(trans, (byte) alpha);
+	}
+
+	private void restoreSelfOpacity(Model model)
+	{
+		SavedModelState state = selfCache.get(model);
+		if (state == null || state.trans == null)
+		{
+			return;
+		}
+
+		byte[] trans = model.getFaceTransparencies();
+		if (trans == null || trans.length != state.trans.length)
+		{
+			return;
+		}
+
+		if (Arrays.equals(trans, state.trans))
+		{
+			return;
+		}
+
+		System.arraycopy(state.trans, 0, trans, 0, state.trans.length);
 	}
 
 	private void applyModelSilhouette(Model model, Color color)
 	{
 		int hsl = colorToHSL(color);
 
-		if (model.getFaceColors1() != null)
+		int[] c1 = model.getFaceColors1();
+		if (c1 != null && (c1.length == 0 || c1[0] != hsl))
 		{
-			Arrays.fill(model.getFaceColors1(), hsl);
+			Arrays.fill(c1, hsl);
 		}
-		if (model.getFaceColors2() != null)
+
+		int[] c2 = model.getFaceColors2();
+		if (c2 != null && (c2.length == 0 || c2[0] != hsl))
 		{
-			Arrays.fill(model.getFaceColors2(), hsl);
+			Arrays.fill(c2, hsl);
 		}
-		if (model.getFaceColors3() != null)
+
+		int[] c3 = model.getFaceColors3();
+		if (c3 != null && (c3.length == 0 || c3[0] != hsl))
 		{
-			Arrays.fill(model.getFaceColors3(), hsl);
+			Arrays.fill(c3, hsl);
 		}
-		if (model.getFaceRenderPriorities() != null)
+
+		byte[] priorities = model.getFaceRenderPriorities();
+		if (priorities != null && (priorities.length == 0 || priorities[0] != 10))
 		{
-			Arrays.fill(model.getFaceRenderPriorities(), (byte) 10);
+			Arrays.fill(priorities, (byte) 10);
 		}
-		if (model.getFaceTextures() != null)
+
+		short[] textures = model.getFaceTextures();
+		if (textures != null && (textures.length == 0 || textures[0] != -1))
 		{
-			Arrays.fill(model.getFaceTextures(), (short) -1);
+			Arrays.fill(textures, (short) -1);
 		}
 	}
 
@@ -210,10 +374,17 @@ public class VisibilityEnhancer extends Plugin
 		{
 			System.arraycopy(state.priorities, 0, model.getFaceRenderPriorities(), 0, state.priorities.length);
 		}
-		if (model.getFaceTextures() != null && state.textures != null && model.getFaceTextures().length == state.textures.length)
+		if (model.getFaceTextures() != null && state.textures != null
+				&& model.getFaceTextures().length == state.textures.length)
 		{
 			System.arraycopy(state.textures, 0, model.getFaceTextures(), 0, state.textures.length);
 		}
+	}
+
+	private int clampAlpha(int opacityPercent)
+	{
+		int alpha = (int) ((100 - opacityPercent) * 2.55);
+		return Math.max(0, Math.min(255, alpha));
 	}
 
 	private int colorToHSL(Color color)
