@@ -22,7 +22,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = opacitySection,
 			description = "Transparency of your own character"
 	)
-	default int selfOpacity() { return 100; }
+	default int selfOpacity() { return 100;
+
+	}
 
 	@Range(min = 0, max = 100)
 	@ConfigItem(
@@ -32,7 +34,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = opacitySection,
 			description = "Transparency of nearby players"
 	)
-	default int playerOpacity() { return 100; }
+	default int playerOpacity() { return 100;
+
+	}
 
 	@Range(min = 0, max = 100)
 	@ConfigItem(
@@ -42,7 +46,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = opacitySection,
 			description = "Transparency of projectiles you fire"
 	)
-	default int myProjectileOpacity() { return 100; }
+	default int myProjectileOpacity() { return 100;
+
+	}
 
 	@Range(min = 1, max = 50)
 	@ConfigItem(
@@ -52,7 +58,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = opacitySection,
 			description = "Radius (in tiles) around you where players will be ghosted"
 	)
-	default int proximityRange() { return 10; }
+	default int proximityRange() { return 10;
+
+	}
 
 	@ConfigItem(
 			keyName = "ignoreFriends",
@@ -61,7 +69,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = opacitySection,
 			description = "Prevents friends from being ghosted/transparent"
 	)
-	default boolean ignoreFriends() { return false; }
+	default boolean ignoreFriends() { return false;
+
+	}
 
 	@ConfigItem(
 			keyName = "limitAffectedPlayers",
@@ -70,7 +80,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = opacitySection,
 			description = "Limits the number of players affected for performance"
 	)
-	default boolean limitAffectedPlayers() { return true; }
+	default boolean limitAffectedPlayers() { return true;
+
+	}
 
 	@Range(min = 1, max = 100)
 	@ConfigItem(
@@ -80,7 +92,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = opacitySection,
 			description = "The maximum number of players to apply effects to"
 	)
-	default int maxAffectedPlayers() { return 8; }
+	default int maxAffectedPlayers() { return 8;
+
+	}
 
 
 	// --- EXTRAS SECTION ---
@@ -96,18 +110,22 @@ public interface VisibilityEnhancerConfig extends Config
 			name = "Clear Ground (Self)",
 			position = 1,
 			section = extrasSection,
-			description = "Hides your Cape, Shield, Legs, and Boots to see ground markers better. Forces My Opacity to 100% while enabled"
+			description = "Hides your Cape, Shield, Legs, and Boots to see ground markers better."
 	)
-	default boolean selfClearGround() { return false; }
+	default boolean selfClearGround() { return false;
+
+	}
 
 	@ConfigItem(
 			keyName = "othersClearGround",
 			name = "Clear Ground (Others)",
 			position = 2,
 			section = extrasSection,
-			description = "Hides Cape, Shield, Legs, and Boots on nearby ghosted players. Forces Ghost Opacity to 100% while enabled"
+			description = "Hides Cape, Shield, Legs, and Boots on nearby ghosted players."
 	)
-	default boolean othersClearGround() { return false; }
+	default boolean othersClearGround() { return false;
+
+	}
 
 	@ConfigItem(
 			keyName = "hideOthersProjectiles",
@@ -116,7 +134,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = extrasSection,
 			description = "Completely hides projectiles that didn't come from you"
 	)
-	default boolean hideOthersProjectiles() { return false; }
+	default boolean hideOthersProjectiles() { return false;
+
+	}
 
 	@ConfigItem(
 			keyName = "hideGhostExtras",
@@ -125,7 +145,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = extrasSection,
 			description = "Hides overhead prayers and hitsplats for ghosted players"
 	)
-	default boolean hideGhostExtras() { return false; }
+	default boolean hideGhostExtras() { return false;
+
+	}
 
 	@ConfigItem(
 			keyName = "customTransparentPrayers",
@@ -134,7 +156,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = extrasSection,
 			description = "Hides native overheads and HP bars for ghosts, replacing them with transparent prayer sprites"
 	)
-	default boolean othersTransparentPrayers() { return false; }
+	default boolean othersTransparentPrayers() { return false;
+
+	}
 
 
 	// --- OUTLINE SECTION ---
@@ -152,7 +176,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = outlineSection,
 			description = "Enable an outline for your character"
 	)
-	default boolean selfOutline() { return false; }
+	default boolean selfOutline() { return false;
+
+	}
 
 	@Alpha
 	@ConfigItem(
@@ -162,7 +188,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = outlineSection,
 			description = "The color of your own outline"
 	)
-	default Color selfOutlineColor() { return Color.WHITE; }
+	default Color selfOutlineColor() { return Color.WHITE;
+
+	}
 
 	@ConfigItem(
 			keyName = "othersOutline",
@@ -171,7 +199,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = outlineSection,
 			description = "Enable outlines for nearby ghosted players"
 	)
-	default boolean othersOutline() { return false; }
+	default boolean othersOutline() { return false;
+
+	}
 
 	@Alpha
 	@ConfigItem(
@@ -181,7 +211,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = outlineSection,
 			description = "The color of ghosted player outlines"
 	)
-	default Color othersOutlineColor() { return new Color(255, 255, 255, 150); }
+	default Color othersOutlineColor() { return new Color(255, 255, 255, 150);
+
+	}
 
 	@ConfigItem(
 			keyName = "hideStackedOutlines",
@@ -190,7 +222,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = outlineSection,
 			description = "Only shows one outline per tile if players are standing on each other"
 	)
-	default boolean hideStackedOutlines() { return true; }
+	default boolean hideStackedOutlines() { return true;
+
+	}
 
 	@ConfigItem(
 			keyName = "useFloorTileOutline",
@@ -199,7 +233,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = outlineSection,
 			description = "Draws a square on the floor instead of outlining the 3D body for ghosted players"
 	)
-	default boolean othersUseFloorTileOutline() { return false; }
+	default boolean othersUseFloorTileOutline() { return false;
+
+	}
 
 	@ConfigItem(
 			keyName = "selfUseFloorTileOutline",
@@ -208,7 +244,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = outlineSection,
 			description = "Draws a square on the floor instead of outlining the 3D body for your own character"
 	)
-	default boolean selfUseFloorTileOutline() { return false; }
+	default boolean selfUseFloorTileOutline() { return false;
+
+	}
 
 
 	// --- OUTLINE STYLE SECTION ---
@@ -227,7 +265,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = styleSection,
 			description = "Thickness of the primary outline"
 	)
-	default int outlineWidth() { return 1; }
+	default int outlineWidth() { return 1;
+
+	}
 
 	@Range(min = 0, max = 10)
 	@ConfigItem(
@@ -237,7 +277,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = styleSection,
 			description = "How soft the edges of the primary line are"
 	)
-	default int outlineFeather() { return 0; }
+	default int outlineFeather() { return 0;
+
+	}
 
 	@ConfigItem(
 			keyName = "enableGlow",
@@ -246,7 +288,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = styleSection,
 			description = "Adds a secondary, wider blurred layer behind the primary line"
 	)
-	default boolean enableGlow() { return false; }
+	default boolean enableGlow() { return false;
+
+	}
 
 	@Range(min = 1, max = 20)
 	@ConfigItem(
@@ -256,7 +300,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = styleSection,
 			description = "Width of the glow layer"
 	)
-	default int glowWidth() { return 4; }
+	default int glowWidth() { return 4;
+
+	}
 
 	@Range(min = 1, max = 10)
 	@ConfigItem(
@@ -266,7 +312,9 @@ public interface VisibilityEnhancerConfig extends Config
 			section = styleSection,
 			description = "Softness/Feathering of the glow layer"
 	)
-	default int glowFeather() { return 4; }
+	default int glowFeather() { return 4;
+
+	}
 
 	@ConfigItem(
 			keyName = "fillFloorTile",
@@ -275,5 +323,7 @@ public interface VisibilityEnhancerConfig extends Config
 			section = styleSection,
 			description = "Fills the inside of the floor tile if 'Use Floor Tile Outline' is enabled"
 	)
-	default boolean fillFloorTile() { return false; }
+	default boolean fillFloorTile() { return false;
+
+	}
 }

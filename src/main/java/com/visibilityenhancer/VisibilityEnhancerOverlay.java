@@ -9,6 +9,7 @@ import java.awt.Color;
 import java.awt.Polygon;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,6 +20,7 @@ import net.runelite.api.Player;
 import net.runelite.api.Point;
 import net.runelite.api.SpriteID;
 import net.runelite.api.Perspective;
+
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.client.game.SpriteManager;
@@ -36,6 +38,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 	private final VisibilityEnhancer plugin;
 	private final VisibilityEnhancerConfig config;
 	private final ModelOutlineRenderer modelOutlineRenderer;
+
 	private final SpriteManager spriteManager;
 
 	private final Set<WorldPoint> renderedTiles = new HashSet<>();
@@ -47,6 +50,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 	private BasicStroke glowStroke;
 
 	private Color cachedColor;
+
 	private Color cachedGlowColor;
 	private Color cachedFillColor;
 
@@ -54,6 +58,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 	private VisibilityEnhancerOverlay(Client client, VisibilityEnhancer plugin, VisibilityEnhancerConfig config, ModelOutlineRenderer modelOutlineRenderer, SpriteManager spriteManager)
 	{
 		this.client = client;
+
 		this.plugin = plugin;
 		this.config = config;
 		this.modelOutlineRenderer = modelOutlineRenderer;
@@ -62,6 +67,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 		setPosition(OverlayPosition.DYNAMIC);
 		setLayer(OverlayLayer.ABOVE_SCENE);
 		setPriority(OverlayPriority.HIGH);
+
 	}
 
 	@Override
@@ -69,6 +75,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 	{
 		Player local = client.getLocalPlayer();
 		WorldPoint localPoint = local != null ? local.getWorldLocation() : null;
+
 		LocalPoint localLocalPoint = local != null ? local.getLocalLocation() : null;
 
 		if (local != null && config.selfOutline())
@@ -76,6 +83,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 			if (config.selfUseFloorTileOutline())
 			{
 				renderFloorTile(graphics, local, config.selfOutlineColor());
+
 			}
 			else
 			{
@@ -103,6 +111,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 
 					return Integer.compare(lp2.distanceTo(localLocalPoint), lp1.distanceTo(localLocalPoint));
 				});
+
 			}
 
 			for (Player player : sortedGhosts)
@@ -124,6 +133,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 				else
 				{
 					renderOutlineLayers(player, othersColor);
+
 				}
 			}
 		}
@@ -138,6 +148,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 				if (othersCustomPrayers)
 				{
 					drawTransparentPrayer(graphics, player, config.playerOpacity());
+
 				}
 
 				drawOverheadText(graphics, player);
@@ -154,18 +165,22 @@ public class VisibilityEnhancerOverlay extends Overlay
 			modelOutlineRenderer.drawOutline(player, config.glowWidth(), color, config.glowFeather());
 		}
 		modelOutlineRenderer.drawOutline(player, config.outlineWidth(), color, config.outlineFeather());
+
 	}
 
 	private void renderFloorTile(Graphics2D graphics, Player player, Color color)
 	{
 		Polygon poly = Perspective.getCanvasTilePoly(client, player.getLocalLocation());
+
 		if (poly != null)
 		{
 			if (cachedColor == null || !cachedColor.equals(color))
 			{
 				cachedColor = color;
+
 				cachedGlowColor = new Color(color.getRed(), color.getGreen(), color.getBlue(), Math.max(0, color.getAlpha() - 100));
 				cachedFillColor = new Color(color.getRed(), color.getGreen(), color.getBlue(), 50);
+
 			}
 
 			if (cachedOutlineWidth != config.outlineWidth())
@@ -177,6 +192,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 			if (cachedGlowWidth != config.glowWidth() || cachedOutlineWidth != config.outlineWidth())
 			{
 				cachedGlowWidth = config.glowWidth();
+
 				glowStroke = new BasicStroke(cachedOutlineWidth + cachedGlowWidth);
 			}
 
@@ -195,6 +211,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 			{
 				graphics.setColor(cachedFillColor);
 				graphics.fill(poly);
+
 			}
 		}
 	}
@@ -205,16 +222,19 @@ public class VisibilityEnhancerOverlay extends Overlay
 		if (icon == null) return;
 
 		int spriteId = getSpriteId(icon);
+
 		if (spriteId == -1) return;
 
 		BufferedImage prayerImage = spriteManager.getSprite(spriteId, 0);
 		if (prayerImage == null) return;
 
 		int zOffset = 20;
+
 		Point point = player.getCanvasImageLocation(prayerImage, player.getLogicalHeight() + zOffset);
 		if (point == null) return;
 
 		int drawX = point.getX();
+
 		int drawY = point.getY() - 25;
 
 		float alpha = opacityPercent / 100f;
@@ -229,14 +249,17 @@ public class VisibilityEnhancerOverlay extends Overlay
 	private void drawOverheadText(Graphics2D graphics, Player player)
 	{
 		String text = player.getOverheadText();
+
 		if (text == null || text.isEmpty()) return;
 
 		int zOffset = 20;
 		Point textPoint = player.getCanvasTextLocation(graphics, text, player.getLogicalHeight() + zOffset);
+
 		if (textPoint == null) return;
 
 		int drawX = textPoint.getX() - 1;
 		int drawY = textPoint.getY() + 6;
+
 		Point adjustedPoint = new Point(drawX, drawY);
 
 		graphics.setFont(FontManager.getRunescapeBoldFont());
@@ -248,11 +271,13 @@ public class VisibilityEnhancerOverlay extends Overlay
 		switch (icon)
 		{
 			case MELEE: return SpriteID.PRAYER_PROTECT_FROM_MELEE;
+
 			case RANGED: return SpriteID.PRAYER_PROTECT_FROM_MISSILES;
 			case MAGIC: return SpriteID.PRAYER_PROTECT_FROM_MAGIC;
 			case RETRIBUTION: return SpriteID.PRAYER_RETRIBUTION;
 			case SMITE: return SpriteID.PRAYER_SMITE;
 			case REDEMPTION: return SpriteID.PRAYER_REDEMPTION;
+
 			default: return -1;
 		}
 	}
