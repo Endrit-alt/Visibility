@@ -25,7 +25,7 @@ import net.runelite.client.input.KeyManager;
 import net.runelite.client.util.HotkeyListener;
 
 @PluginDescriptor(
-        name = "Visibility Enhancer",
+        name = "Raids Visibility Enhancer",
         description = "Teammate opacity, ground-view filters, and outlines for raids.",
         tags = {"raid", "raids", "raids visibility enhancer", "opacity", "outline", "equipment"}
 )
@@ -92,13 +92,10 @@ public class VisibilityEnhancer extends Plugin
             pluginToggledOn = false;
             lastPress = null;
 
-            Player local = client.getLocalPlayer();
-            if (local != null)
+            clientThread.invokeLater(() ->
             {
-               restorePlayer(local);
-            }
-
-            clearAllGhosting();
+               clearAllGhosting();
+            });
          }
          else
          {
@@ -167,35 +164,12 @@ public class VisibilityEnhancer extends Plugin
       hooks.unregisterRenderableDrawListener(drawListener);
       keyManager.unregisterKeyListener(hotkeyListener);
 
-      clientThread.invokeLater(() ->
-      {
-         if (client.getGameState() == GameState.LOGGED_IN)
-         {
-            for (Player p : client.getPlayers())
-            {
-               if (p != null)
-               {
-                  restorePlayer(p);
-               }
-            }
-         }
-
-         ghostedPlayers.clear();
-         originalEquipmentMap.clear();
-         myProjectiles.clear();
-         customHitsplats.clear();
-         inRange.clear();
-         currentInRange.clear();
-         noLongerGhosted.clear();
-      });
+      clientThread.invokeLater(this::clearAllGhosting);
 
       cachedLocalPlayer = null;
       wasActive = false;
    }
 
-   /**
-    * Determines if the plugin's visual effects should currently be active.
-    */
    public boolean isActive()
    {
       if (!pluginToggledOn) return false;
@@ -228,9 +202,9 @@ public class VisibilityEnhancer extends Plugin
             case 12889: return config.coxOlm();
 
             // Other Bosses
-            case 11601: return config.otherNex(); // Nex (Ancient Prison)
-            case 15515: return config.otherNightmare(); // The Nightmare / Phosani's
-            case 11827: case 11828: case 12084: return config.otherRoyalTitans(); // Royal Titans (Asgarnian Ice Dungeon)
+            case 11601: return config.otherNex();
+            case 15515: return config.otherNightmare();
+            case 11827: case 11828: case 12084: return config.otherRoyalTitans();
          }
       }
       return false;
@@ -331,19 +305,12 @@ public class VisibilityEnhancer extends Plugin
    @Subscribe
    public void onPlayerChanged(PlayerChanged event)
    {
-      // FIX: If the plugin/area filter is inactive, do not apply any new filters!
-      if (!isActive())
-      {
-         return;
-      }
+      if (!isActive()) return;
 
       Player p = event.getPlayer();
       Player local = client.getLocalPlayer();
 
-      if (p == null || local == null)
-      {
-         return;
-      }
+      if (p == null || local == null) return;
 
       if (p == local)
       {
@@ -353,7 +320,6 @@ public class VisibilityEnhancer extends Plugin
          {
             applyClothingFilter(p);
          }
-
          return;
       }
 
@@ -373,11 +339,14 @@ public class VisibilityEnhancer extends Plugin
       {
          if (!config.selfClearGround())
          {
-            Player local = client.getLocalPlayer();
-            if (local != null)
+            clientThread.invokeLater(() ->
             {
-               restoreClothing(local);
-            }
+               Player local = client.getLocalPlayer();
+               if (local != null)
+               {
+                  restoreClothing(local);
+               }
+            });
          }
       }
    }
@@ -389,11 +358,6 @@ public class VisibilityEnhancer extends Plugin
 
       if (wasActive && !currentlyActive)
       {
-         Player local = client.getLocalPlayer();
-         if (local != null)
-         {
-            restorePlayer(local);
-         }
          clearAllGhosting();
       }
       wasActive = currentlyActive;
@@ -484,19 +448,10 @@ public class VisibilityEnhancer extends Plugin
             LocalPoint lp1 = p1.getLocalLocation();
             LocalPoint lp2 = p2.getLocalLocation();
 
-            if (lp1 == null || lp2 == null)
-            {
-               return 0;
-            }
+            if (lp1 == null || lp2 == null) return 0;
 
-            int dist1 = Math.max(
-                    Math.abs(localX - lp1.getSceneX()),
-                    Math.abs(localY - lp1.getSceneY())
-            );
-            int dist2 = Math.max(
-                    Math.abs(localX - lp2.getSceneX()),
-                    Math.abs(localY - lp2.getSceneY())
-            );
+            int dist1 = Math.max(Math.abs(localX - lp1.getSceneX()), Math.abs(localY - lp1.getSceneY()));
+            int dist2 = Math.max(Math.abs(localX - lp2.getSceneX()), Math.abs(localY - lp2.getSceneY()));
 
             return Integer.compare(dist1, dist2);
          });
@@ -513,23 +468,11 @@ public class VisibilityEnhancer extends Plugin
 
       for (Player p : currentInRange)
       {
-         if (opacity < 100)
-         {
-            applyOpacity(p, opacity);
-         }
-         else
-         {
-            restoreOpacity(p);
-         }
+         if (opacity < 100) applyOpacity(p, opacity);
+         else restoreOpacity(p);
 
-         if (hideOthersClothes)
-         {
-            applyClothingFilter(p);
-         }
-         else if (originalEquipmentMap.containsKey(p))
-         {
-            restoreClothing(p);
-         }
+         if (hideOthersClothes) applyClothingFilter(p);
+         else if (originalEquipmentMap.containsKey(p)) restoreClothing(p);
       }
 
       noLongerGhosted.addAll(ghostedPlayers);
@@ -550,21 +493,12 @@ public class VisibilityEnhancer extends Plugin
       if (!isActive()) return;
 
       Player local = client.getLocalPlayer();
-      if (local == null)
-      {
-         return;
-      }
+      if (local == null) return;
 
       int selfOpacity = config.selfClearGround() ? 100 : config.selfOpacity();
 
-      if (selfOpacity < 100)
-      {
-         applyOpacity(local, selfOpacity);
-      }
-      else
-      {
-         restoreOpacity(local);
-      }
+      if (selfOpacity < 100) applyOpacity(local, selfOpacity);
+      else restoreOpacity(local);
 
       int othersAlpha = clampAlpha(config.playerOpacity());
       int myProjAlpha = clampAlpha(config.myProjectileOpacity());
@@ -580,23 +514,14 @@ public class VisibilityEnhancer extends Plugin
 
          Actor target = proj.getInteracting();
 
-         if (target == local || target == null)
-         {
-            forceOpaque.add(m);
-         }
+         if (target == local || target == null) forceOpaque.add(m);
          else if (myProjectiles.contains(proj))
          {
-            if (!forceOpaque.contains(m))
-            {
-               forceMyAlpha.add(m);
-            }
+            if (!forceOpaque.contains(m)) forceMyAlpha.add(m);
          }
          else
          {
-            if (!forceOpaque.contains(m) && !forceMyAlpha.contains(m))
-            {
-               forceOthersAlpha.add(m);
-            }
+            if (!forceOpaque.contains(m) && !forceMyAlpha.contains(m)) forceOthersAlpha.add(m);
          }
       }
 
@@ -644,12 +569,9 @@ public class VisibilityEnhancer extends Plugin
          Player player = (Player) renderable;
          boolean isGhost = ghostedPlayers.contains(player);
 
-         if (drawingUI)
+         if (drawingUI && isGhost && config.othersTransparentPrayers())
          {
-            if (isGhost && config.othersTransparentPrayers())
-            {
-               return false;
-            }
+            return false;
          }
       }
 
@@ -668,16 +590,8 @@ public class VisibilityEnhancer extends Plugin
    private int getEffectiveOpacity(Player player)
    {
       Player local = client.getLocalPlayer();
-      if (player == null || local == null)
-      {
-         return 100;
-      }
-
-      if (player == local)
-      {
-         return config.selfClearGround() ? 100 : config.selfOpacity();
-      }
-
+      if (player == null || local == null) return 100;
+      if (player == local) return config.selfClearGround() ? 100 : config.selfOpacity();
       return config.othersClearGround() ? 100 : config.playerOpacity();
    }
 
@@ -691,10 +605,7 @@ public class VisibilityEnhancer extends Plugin
       }
 
       PlayerComposition comp = player.getPlayerComposition();
-      if (comp == null)
-      {
-         return;
-      }
+      if (comp == null) return;
 
       int[] equipmentIds = comp.getEquipmentIds();
 
@@ -726,33 +637,22 @@ public class VisibilityEnhancer extends Plugin
          comp.setHash();
 
          Model newModel = player.getModel();
-
          if (newModel != null)
          {
             int targetOpacity = getEffectiveOpacity(player);
+            if (newModel.getOverrideAmount() != 0) targetOpacity = 100;
 
-            if (newModel.getOverrideAmount() != 0)
-            {
-               targetOpacity = 100;
-            }
-
+            byte[] trans = newModel.getFaceTransparencies();
             if (targetOpacity < 100)
             {
-               byte[] trans = newModel.getFaceTransparencies();
-
                if (trans != null && trans.length > 0)
                {
                   int alpha = clampAlpha(targetOpacity);
-
-                  if ((trans[0] & 0xFF) != alpha)
-                  {
-                     Arrays.fill(trans, (byte) alpha);
-                  }
+                  if ((trans[0] & 0xFF) != alpha) Arrays.fill(trans, (byte) alpha);
                }
             }
             else
             {
-               byte[] trans = newModel.getFaceTransparencies();
                if (trans != null && trans.length > 0 && (trans[0] & 0xFF) != 0)
                {
                   Arrays.fill(trans, (byte) 0);
@@ -764,14 +664,7 @@ public class VisibilityEnhancer extends Plugin
 
    private void restoreClothing(Player player)
    {
-      if (!originalEquipmentMap.containsKey(player))
-      {
-         if (player == client.getLocalPlayer())
-         {
-            forceRestoreLocalPlayerClothing(player);
-         }
-         return;
-      }
+      if (!originalEquipmentMap.containsKey(player)) return;
 
       PlayerComposition comp = player.getPlayerComposition();
       if (comp != null)
@@ -785,32 +678,6 @@ public class VisibilityEnhancer extends Plugin
       originalEquipmentMap.remove(player);
    }
 
-   private void forceRestoreLocalPlayerClothing(Player local)
-   {
-      if (local == null) return;
-
-      PlayerComposition comp = local.getPlayerComposition();
-      ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
-
-      if (comp != null && equipment != null)
-      {
-         int[] equipmentIds = comp.getEquipmentIds();
-
-         equipmentIds[KitType.CAPE.getIndex()] = getEquipId(equipment, EquipmentInventorySlot.CAPE);
-         equipmentIds[KitType.SHIELD.getIndex()] = getEquipId(equipment, EquipmentInventorySlot.SHIELD);
-         equipmentIds[KitType.LEGS.getIndex()] = getEquipId(equipment, EquipmentInventorySlot.LEGS);
-         equipmentIds[KitType.BOOTS.getIndex()] = getEquipId(equipment, EquipmentInventorySlot.BOOTS);
-
-         comp.setHash();
-      }
-   }
-
-   private int getEquipId(ItemContainer container, EquipmentInventorySlot slot)
-   {
-      Item item = container.getItem(slot.getSlotIdx());
-      return item == null ? -1 : item.getId() + 512;
-   }
-
    private boolean isExemptAnimation(Player player)
    {
       return player != null && EXEMPT_ANIMATIONS.contains(player.getAnimation());
@@ -819,10 +686,7 @@ public class VisibilityEnhancer extends Plugin
    private void applyOpacity(Player p, int opacityPercent)
    {
       Model model = p.getModel();
-      if (model == null)
-      {
-         return;
-      }
+      if (model == null) return;
 
       if (model.getOverrideAmount() != 0 && !isExemptAnimation(p))
       {
@@ -831,25 +695,16 @@ public class VisibilityEnhancer extends Plugin
       }
 
       byte[] trans = model.getFaceTransparencies();
-      if (trans == null || trans.length == 0)
-      {
-         return;
-      }
+      if (trans == null || trans.length == 0) return;
 
       int alpha = clampAlpha(opacityPercent);
-      if ((trans[0] & 0xFF) != alpha)
-      {
-         Arrays.fill(trans, (byte) alpha);
-      }
+      if ((trans[0] & 0xFF) != alpha) Arrays.fill(trans, (byte) alpha);
    }
 
    private void restoreOpacity(Player p)
    {
       Model model = p.getModel();
-      if (model == null)
-      {
-         return;
-      }
+      if (model == null) return;
 
       byte[] trans = model.getFaceTransparencies();
       if (trans != null && trans.length > 0 && (trans[0] & 0xFF) != 0)
@@ -866,7 +721,11 @@ public class VisibilityEnhancer extends Plugin
 
    private void clearAllGhosting()
    {
-      for (Player p : ghostedPlayers)
+      // Pool everyone that was modified in any way (opacity OR clothing)
+      Set<Player> allAffected = new HashSet<>(ghostedPlayers);
+      allAffected.addAll(originalEquipmentMap.keySet());
+
+      for (Player p : allAffected)
       {
          restorePlayer(p);
       }
@@ -879,11 +738,7 @@ public class VisibilityEnhancer extends Plugin
 
    private int clampAlpha(int opacityPercent)
    {
-      if (opacityPercent >= 100)
-      {
-         return 0;
-      }
-
+      if (opacityPercent >= 100) return 0;
       return (int) ((100 - opacityPercent) * 2.5);
    }
 
