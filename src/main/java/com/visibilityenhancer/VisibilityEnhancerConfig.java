@@ -349,4 +349,85 @@ public interface VisibilityEnhancerConfig extends Config
 	)
 	@Units(Units.MILLISECONDS)
 	default int doubleTapDelay() { return 250; }
+
+
+	// --- AREA FILTERING SECTION ---
+	@ConfigSection(
+			name = "Area Filtering",
+			description = "Automatically enable/disable the plugin based on your location.",
+			position = 50
+	)
+	String areaFilteringSection = "areaFilteringSection";
+
+	@ConfigItem(
+			keyName = "enableAreaFiltering",
+			name = "Enable Area Filtering",
+			position = 1,
+			section = areaFilteringSection,
+			description = "If enabled, the plugin will ONLY apply its effects in the selected rooms below."
+	)
+	default boolean enableAreaFiltering() { return false; }
+
+	// --- THEATRE OF BLOOD ---
+	@ConfigSection(name = "Theatre of Blood", description = "ToB Rooms", position = 51)
+	String tobSection = "tobSection";
+
+	@ConfigItem(keyName = "tobMaiden", name = "Maiden", section = tobSection, position = 1, description = "Enable in Maiden room")
+	default boolean tobMaiden() { return true; }
+
+	@ConfigItem(keyName = "tobBloat", name = "Bloat", section = tobSection, position = 2, description = "Enable in Bloat room")
+	default boolean tobBloat() { return true; }
+
+	@ConfigItem(keyName = "tobNylo", name = "Nylocas", section = tobSection, position = 3, description = "Enable in Nylocas room")
+	default boolean tobNylo() { return true; }
+
+	@ConfigItem(keyName = "tobSote", name = "Sotetseg", section = tobSection, position = 4, description = "Enable in Sotetseg room")
+	default boolean tobSote() { return true; }
+
+	@ConfigItem(keyName = "tobXarpus", name = "Xarpus", section = tobSection, position = 5, description = "Enable in Xarpus room")
+	default boolean tobXarpus() { return true; }
+
+	@ConfigItem(keyName = "tobVerzik", name = "Verzik", section = tobSection, position = 6, description = "Enable in Verzik room")
+	default boolean tobVerzik() { return true; }
+
+
+	// --- TOMBS OF AMASCUT ---
+	@ConfigSection(name = "Tombs of Amascut", description = "ToA Rooms", position = 52)
+	String toaSection = "toaSection";
+
+	@ConfigItem(keyName = "toaZebak", name = "Zebak", section = toaSection, position = 1, description = "Enable in Zebak room")
+	default boolean toaZebak() { return true; }
+
+	@ConfigItem(keyName = "toaKephri", name = "Kephri", section = toaSection, position = 2, description = "Enable in Kephri room")
+	default boolean toaKephri() { return true; }
+
+	@ConfigItem(keyName = "toaAkkha", name = "Akkha", section = toaSection, position = 3, description = "Enable in Akkha room")
+	default boolean toaAkkha() { return true; }
+
+	@ConfigItem(keyName = "toaBaba", name = "Ba-Min", section = toaSection, position = 4, description = "Enable in Ba-Min room")
+	default boolean toaBaba() { return true; }
+
+	@ConfigItem(keyName = "toaWardens", name = "Wardens", section = toaSection, position = 5, description = "Enable in Wardens room")
+	default boolean toaWardens() { return true; }
+
+
+	// --- CHAMBERS OF XERIC ---
+	@ConfigSection(name = "Chambers of Xeric", description = "CoX Rooms", position = 53)
+	String coxSection = "coxSection";
+
+	@ConfigItem(keyName = "coxOlm", name = "Great Olm", section = coxSection, position = 1, description = "Static region check for Olm.")
+	default boolean coxOlm() { return true; }
+
+	// --- OTHER BOSSES ---
+	@ConfigSection(name = "Other Bosses", description = "Other Boss Rooms", position = 54)
+	String otherSection = "otherSection";
+
+	@ConfigItem(keyName = "otherNex", name = "Nex", section = otherSection, position = 1, description = "Enable in Nex room")
+	default boolean otherNex() { return true; }
+
+	@ConfigItem(keyName = "otherNightmare", name = "The Nightmare", section = otherSection, position = 2, description = "Enable in The Nightmare / Phosani's Nightmare")
+	default boolean otherNightmare() { return true; }
+
+	@ConfigItem(keyName = "otherRoyalTitans", name = "Royal Titans", section = otherSection, position = 3, description = "Enable in the Royal Titans arena")
+	default boolean otherRoyalTitans() { return true; }
 }

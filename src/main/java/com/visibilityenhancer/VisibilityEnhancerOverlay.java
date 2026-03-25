@@ -10,10 +10,14 @@ import java.awt.Polygon;
 import java.awt.Rectangle;
 import java.awt.FontMetrics;
 import java.awt.image.BufferedImage;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import javax.inject.Inject;
 import net.runelite.api.Actor;
 import net.runelite.api.Client;
@@ -58,6 +62,22 @@ public class VisibilityEnhancerOverlay extends Overlay
 	private Color cachedGlowColor;
 	private Color cachedFillColor;
 
+	// --- Spam Tracker Variables ---
+	private static final int MESSAGE_DISPLAY_DURATION_MS = 4000; // 4 seconds natural display time
+	private static final int MESSAGE_COOLDOWN_MS = 10000; // 10 seconds cooldown for SAME message
+	private static final int FAST_TYPING_COOLDOWN_MS = 2000; // 2 seconds between DIFFERENT messages
+
+	private static class SpamTracker
+	{
+		String text;
+		Instant firstSeen; // When the CURRENT text was first spoken
+		Instant lastSpoke; // When the player last spoke ANY accepted message
+	}
+
+	// WeakHashMap automatically cleans up players when they log out or leave the area
+	private final Map<Player, SpamTracker> spamTrackerMap = new WeakHashMap<>();
+	// ------------------------------
+
 	@Inject
 	private VisibilityEnhancerOverlay(Client client, VisibilityEnhancer plugin, VisibilityEnhancerConfig config, ModelOutlineRenderer modelOutlineRenderer, SpriteManager spriteManager)
 	{
@@ -75,7 +95,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 	@Override
 	public Dimension render(Graphics2D graphics)
 	{
-		if (!plugin.isPluginToggledOn())
+		if (!plugin.isActive())
 		{
 			return null;
 		}
@@ -498,6 +518,44 @@ public class VisibilityEnhancerOverlay extends Overlay
 	{
 		String text = player.getOverheadText();
 		if (text == null || text.isEmpty()) return;
+
+		// --- SPAM FILTER LOGIC ---
+		SpamTracker tracker = spamTrackerMap.computeIfAbsent(player, p -> new SpamTracker());
+		Instant now = Instant.now();
+
+		// If it's the exact SAME message
+		if (tracker.text != null && tracker.text.equals(text))
+		{
+			long elapsedSinceFirst = Duration.between(tracker.firstSeen, now).toMillis();
+
+			// Hide if between 4s and 10s
+			if (elapsedSinceFirst > MESSAGE_DISPLAY_DURATION_MS && elapsedSinceFirst < MESSAGE_COOLDOWN_MS)
+			{
+				return;
+			}
+			// Reset if over 10s (allow it to display again)
+			else if (elapsedSinceFirst >= MESSAGE_COOLDOWN_MS)
+			{
+				tracker.firstSeen = now;
+				tracker.lastSpoke = now;
+			}
+		}
+		// If it's a completely NEW message
+		else
+		{
+			// Check if they are trying to speak too quickly since their last approved message
+			if (tracker.lastSpoke != null && Duration.between(tracker.lastSpoke, now).toMillis() < FAST_TYPING_COOLDOWN_MS)
+			{
+				// They are spamming different messages too fast, ignore this one
+				return;
+			}
+
+			// Approved! Update tracker to this new message
+			tracker.text = text;
+			tracker.firstSeen = now;
+			tracker.lastSpoke = now;
+		}
+		// -------------------------
 
 		int zOffset = 20;
 		Point textPoint = player.getCanvasTextLocation(graphics, text, player.getLogicalHeight() + zOffset);

@@ -17,6 +17,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.callback.Hooks;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.ui.overlay.OverlayManager;
@@ -73,6 +74,8 @@ public class VisibilityEnhancer extends Plugin
    private final Set<Player> currentInRange = new HashSet<>();
    private final Set<Player> noLongerGhosted = new HashSet<>();
 
+   private boolean wasActive = false;
+
    private final HotkeyListener hotkeyListener = new HotkeyListener(() -> config.toggleHotkey())
    {
       @Override
@@ -89,13 +92,13 @@ public class VisibilityEnhancer extends Plugin
             pluginToggledOn = false;
             lastPress = null;
 
-            clearAllGhosting();
-
             Player local = client.getLocalPlayer();
             if (local != null)
             {
                restorePlayer(local);
             }
+
+            clearAllGhosting();
          }
          else
          {
@@ -154,6 +157,7 @@ public class VisibilityEnhancer extends Plugin
       keyManager.registerKeyListener(hotkeyListener);
       pluginToggledOn = true;
       hotkeyHeld = false;
+      wasActive = false;
    }
 
    @Override
@@ -175,22 +179,67 @@ public class VisibilityEnhancer extends Plugin
                }
             }
          }
+
+         ghostedPlayers.clear();
+         originalEquipmentMap.clear();
+         myProjectiles.clear();
+         customHitsplats.clear();
+         inRange.clear();
+         currentInRange.clear();
+         noLongerGhosted.clear();
       });
 
-      ghostedPlayers.clear();
-      originalEquipmentMap.clear();
-      myProjectiles.clear();
-      customHitsplats.clear();
-      inRange.clear();
-      currentInRange.clear();
-      noLongerGhosted.clear();
       cachedLocalPlayer = null;
+      wasActive = false;
+   }
+
+   /**
+    * Determines if the plugin's visual effects should currently be active.
+    */
+   public boolean isActive()
+   {
+      if (!pluginToggledOn) return false;
+
+      if (!config.enableAreaFiltering()) return true;
+
+      int[] regions = client.getMapRegions();
+      if (regions == null) return false;
+
+      for (int regionId : regions)
+      {
+         switch (regionId)
+         {
+            // ToB
+            case 12613: return config.tobMaiden();
+            case 13125: return config.tobBloat();
+            case 13122: return config.tobNylo();
+            case 13123: case 13379: return config.tobSote();
+            case 12612: return config.tobXarpus();
+            case 12611: return config.tobVerzik();
+
+            // ToA
+            case 15700: return config.toaZebak();
+            case 14164: return config.toaKephri();
+            case 14676: return config.toaAkkha();
+            case 15188: return config.toaBaba();
+            case 15184: case 15696: return config.toaWardens();
+
+            // CoX
+            case 12889: return config.coxOlm();
+
+            // Other Bosses
+            case 11601: return config.otherNex(); // Nex (Ancient Prison)
+            case 15515: return config.otherNightmare(); // The Nightmare / Phosani's
+            case 11827: case 11828: case 12084: return config.otherRoyalTitans(); // Royal Titans (Asgarnian Ice Dungeon)
+         }
+      }
+      return false;
    }
 
    @Subscribe
    public void onHitsplatApplied(HitsplatApplied event)
    {
-      if (!pluginToggledOn) return;
+      if (!isActive()) return;
 
       if (event.getActor() instanceof Player)
       {
@@ -207,7 +256,7 @@ public class VisibilityEnhancer extends Plugin
    @Subscribe
    public void onClientTick(ClientTick event)
    {
-      if (!pluginToggledOn) return;
+      if (!isActive()) return;
 
       cachedLocalPlayer = client.getLocalPlayer();
 
@@ -234,7 +283,7 @@ public class VisibilityEnhancer extends Plugin
    @Subscribe
    public void onProjectileMoved(ProjectileMoved event)
    {
-      if (!pluginToggledOn) return;
+      if (!isActive()) return;
 
       Projectile proj = event.getProjectile();
 
@@ -282,6 +331,12 @@ public class VisibilityEnhancer extends Plugin
    @Subscribe
    public void onPlayerChanged(PlayerChanged event)
    {
+      // FIX: If the plugin/area filter is inactive, do not apply any new filters!
+      if (!isActive())
+      {
+         return;
+      }
+
       Player p = event.getPlayer();
       Player local = client.getLocalPlayer();
 
@@ -312,9 +367,38 @@ public class VisibilityEnhancer extends Plugin
    }
 
    @Subscribe
+   public void onConfigChanged(ConfigChanged event)
+   {
+      if (event.getGroup().equals("visibilityenhancer") && event.getKey().equals("selfClearGround"))
+      {
+         if (!config.selfClearGround())
+         {
+            Player local = client.getLocalPlayer();
+            if (local != null)
+            {
+               restoreClothing(local);
+            }
+         }
+      }
+   }
+
+   @Subscribe
    public void onGameTick(GameTick event)
    {
-      if (!pluginToggledOn) return;
+      boolean currentlyActive = isActive();
+
+      if (wasActive && !currentlyActive)
+      {
+         Player local = client.getLocalPlayer();
+         if (local != null)
+         {
+            restorePlayer(local);
+         }
+         clearAllGhosting();
+      }
+      wasActive = currentlyActive;
+
+      if (!currentlyActive) return;
 
       Player local = client.getLocalPlayer();
       if (local == null)
@@ -463,7 +547,7 @@ public class VisibilityEnhancer extends Plugin
    @Subscribe
    public void onBeforeRender(BeforeRender event)
    {
-      if (!pluginToggledOn) return;
+      if (!isActive()) return;
 
       Player local = client.getLocalPlayer();
       if (local == null)
@@ -546,7 +630,7 @@ public class VisibilityEnhancer extends Plugin
 
    private boolean shouldDraw(Renderable renderable, boolean drawingUI)
    {
-      if (!pluginToggledOn) return true;
+      if (!isActive()) return true;
 
       if (renderable instanceof Projectile && config.hideOthersProjectiles())
       {
@@ -569,7 +653,6 @@ public class VisibilityEnhancer extends Plugin
          }
       }
 
-      // Hide Thralls check
       if (renderable instanceof NPC && config.hideThralls())
       {
          NPC npc = (NPC) renderable;
@@ -683,6 +766,10 @@ public class VisibilityEnhancer extends Plugin
    {
       if (!originalEquipmentMap.containsKey(player))
       {
+         if (player == client.getLocalPlayer())
+         {
+            forceRestoreLocalPlayerClothing(player);
+         }
          return;
       }
 
@@ -696,6 +783,32 @@ public class VisibilityEnhancer extends Plugin
       }
 
       originalEquipmentMap.remove(player);
+   }
+
+   private void forceRestoreLocalPlayerClothing(Player local)
+   {
+      if (local == null) return;
+
+      PlayerComposition comp = local.getPlayerComposition();
+      ItemContainer equipment = client.getItemContainer(InventoryID.EQUIPMENT);
+
+      if (comp != null && equipment != null)
+      {
+         int[] equipmentIds = comp.getEquipmentIds();
+
+         equipmentIds[KitType.CAPE.getIndex()] = getEquipId(equipment, EquipmentInventorySlot.CAPE);
+         equipmentIds[KitType.SHIELD.getIndex()] = getEquipId(equipment, EquipmentInventorySlot.SHIELD);
+         equipmentIds[KitType.LEGS.getIndex()] = getEquipId(equipment, EquipmentInventorySlot.LEGS);
+         equipmentIds[KitType.BOOTS.getIndex()] = getEquipId(equipment, EquipmentInventorySlot.BOOTS);
+
+         comp.setHash();
+      }
+   }
+
+   private int getEquipId(ItemContainer container, EquipmentInventorySlot slot)
+   {
+      Item item = container.getItem(slot.getSlotIdx());
+      return item == null ? -1 : item.getId() + 512;
    }
 
    private boolean isExemptAnimation(Player player)
