@@ -135,6 +135,18 @@ public class VisibilityEnhancer extends Plugin
            NpcID.ARCEUUS_THRALL_GHOST_GREATER, NpcID.ARCEUUS_THRALL_SKELETON_GREATER, NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER
    );
 
+   // --- Boss Projectile Safety List (Forced to 100% Opacity) ---
+   private static final Set<Integer> BOSS_PROJECTILES = ImmutableSet.<Integer>builder()
+           // ToA: Wardens (P1 Orbs, P2/P3 Mage/Range), Akkha (Mage/Range/Orbs), Zebak, Kephri
+           .add(2206, 2228, 2242, 2243, 2224, 2225, 2241, 2137, 2138, 2266)
+           // ToB: Verzik (Mage/Range/P3), Sote (Ball/Small), Xarpus (Screech), Nylo (Small), Maiden (Blood)
+           .add(1583, 1584, 1585, 1586, 1591, 1604, 1606, 1607, 1555, 1560, 1577, 1578)
+           // CoX: Olm (Mage/Range/Spheres), Vasa, Muttadile
+           .add(1339, 1340, 1341, 1343, 1345, 1354, 1327, 1291)
+           // Other: Nex (Shadow/Ice), Nightmare (Spores), Royal Titans
+           .add(2010, 2011, 1764)
+           .build();
+
    // --- Simplified Hitsplat Tracker ---
    @Getter
    @AllArgsConstructor
@@ -184,8 +196,6 @@ public class VisibilityEnhancer extends Plugin
       LocalPoint lp = local.getLocalLocation();
       if (lp == null) return false;
 
-      // Gets the exact template region the player is standing on,
-      // ignoring other regions loaded nearby in the instance.
       int regionId = WorldPoint.fromLocalInstance(client, lp).getRegionID();
 
       switch (regionId)
@@ -214,7 +224,6 @@ public class VisibilityEnhancer extends Plugin
          case 11827: case 11828: case 12084: return config.otherRoyalTitans();
       }
 
-      // If they are inside Chambers of Xeric (Varbit 5432) but NOT in Olm (checked above)
       if (client.getVarbitValue(Varbits.IN_RAID) == 1)
       {
          return config.coxRest();
@@ -235,7 +244,6 @@ public class VisibilityEnhancer extends Plugin
          {
             int amount = event.getHitsplat().getAmount();
 
-            // If the hitsplat is a 0 and the user wants to hide them, drop it immediately
             if (amount == 0 && config.hideZeroHitsplats())
             {
                return;
@@ -318,7 +326,6 @@ public class VisibilityEnhancer extends Plugin
    {
       Player p = event.getPlayer();
 
-      // Fix: Restore their clothing and opacity BEFORE we forget them
       if (ghostedPlayers.contains(p) || originalEquipmentMap.containsKey(p))
       {
          restorePlayer(p);
@@ -364,7 +371,6 @@ public class VisibilityEnhancer extends Plugin
    {
       if (event.getGroup().equals("visibilityenhancer"))
       {
-         // Instantly check for toggles instead of waiting for the next game tick
          clientThread.invokeLater(this::checkStateTransition);
 
          if (event.getKey().equals("selfClearGround") && !config.selfClearGround())
@@ -376,7 +382,7 @@ public class VisibilityEnhancer extends Plugin
                {
                   restoreClothing(local);
                   PlayerComposition comp = local.getPlayerComposition();
-                  if (comp != null) comp.setHash(); // Force cache update
+                  if (comp != null) comp.setHash();
                }
             });
          }
@@ -386,7 +392,6 @@ public class VisibilityEnhancer extends Plugin
    @Subscribe
    public void onGameTick(GameTick event)
    {
-      // Replaces the old wasActive logic
       checkStateTransition();
 
       if (!isActive()) return;
@@ -519,7 +524,6 @@ public class VisibilityEnhancer extends Plugin
    {
       if (!isActive()) return;
 
-      // Mark as active so the plugin knows it MUST clean up if toggled off immediately
       wasActive = true;
 
       Player local = client.getLocalPlayer();
@@ -536,10 +540,9 @@ public class VisibilityEnhancer extends Plugin
       Map<byte[], Model> arrayToModel = new HashMap<>();
       Map<byte[], Integer> arrayState = new HashMap<>();
 
-      // Priority States
-      final int STATE_RESTORE = 0; // Highest priority
-      final int STATE_MINE = 1;    // Medium priority
-      final int STATE_OTHERS = 2;  // Lowest priority
+      final int STATE_RESTORE = 0; // Priority 1: Bosses, Ground Attacks, Hitting You
+      final int STATE_MINE = 1;    // Priority 2: Your projectiles
+      final int STATE_OTHERS = 2;  // Priority 3: Other player projectiles
 
       for (Projectile proj : client.getProjectiles())
       {
@@ -550,20 +553,17 @@ public class VisibilityEnhancer extends Plugin
          if (trans == null || trans.length == 0) continue;
 
          Actor target = proj.getInteracting();
-
-         // THE FIX: Added 'target == null' back so ground attacks (Wardens) are fully visible!
+         boolean isBossProjectile = BOSS_PROJECTILES.contains(proj.getId());
          boolean isTargetingMeOrGround = (target == local || target == null);
          boolean isMine = myProjectiles.contains(proj);
 
          Integer currentState = arrayState.get(trans);
 
-         // Priority 1: Hitting you or the floor = 100% Natively
-         if (isTargetingMeOrGround)
+         if (isBossProjectile || isTargetingMeOrGround)
          {
             arrayState.put(trans, STATE_RESTORE);
             arrayToModel.put(trans, m);
          }
-         // Priority 2: Your projectile = My Opacity
          else if (isMine)
          {
             if (currentState == null || currentState != STATE_RESTORE)
@@ -572,7 +572,6 @@ public class VisibilityEnhancer extends Plugin
                arrayToModel.put(trans, m);
             }
          }
-         // Priority 3: Other's projectile = Others Config
          else
          {
             if (currentState == null)
@@ -583,7 +582,6 @@ public class VisibilityEnhancer extends Plugin
          }
       }
 
-      // Apply the winning alpha to each shared array exactly once
       for (Map.Entry<byte[], Integer> entry : arrayState.entrySet())
       {
          byte[] trans = entry.getKey();
@@ -596,31 +594,6 @@ public class VisibilityEnhancer extends Plugin
          }
          else if (state == STATE_MINE)
          {
-            if (selfOpacity < 100) applyModelAlpha(m, selfAlpha);
-            else restoreModelAlpha(m);
-         }
-         else if (state == STATE_OTHERS)
-         {
-            if (config.playerOpacity() < 100) applyModelAlpha(m, othersAlpha);
-            else restoreModelAlpha(m);
-         }
-      }
-
-
-      // Apply the winning alpha to each shared array exactly once
-      for (Map.Entry<byte[], Integer> entry : arrayState.entrySet())
-      {
-         byte[] trans = entry.getKey();
-         int state = entry.getValue();
-         Model m = arrayToModel.get(trans);
-
-         if (state == STATE_RESTORE)
-         {
-            restoreModelAlpha(m);
-         }
-         else if (state == STATE_MINE)
-         {
-            // Now strictly mirrors your character's opacity
             if (selfOpacity < 100) applyModelAlpha(m, selfAlpha);
             else restoreModelAlpha(m);
          }
@@ -658,13 +631,11 @@ public class VisibilityEnhancer extends Plugin
       {
          NPC npc = (NPC) renderable;
 
-         // Hide Thralls
          if (THRALL_IDS.contains(npc.getId()))
          {
             return false;
          }
 
-         // Hide other players' pets
          net.runelite.api.NPCComposition comp = npc.getComposition();
          if (comp != null && comp.isFollower() && npc != client.getFollower())
          {
@@ -722,7 +693,6 @@ public class VisibilityEnhancer extends Plugin
       };
 
       boolean changed = false;
-
       for (int slot : slotsToHide)
       {
          if (equipmentIds[slot] != -1)
@@ -781,7 +751,6 @@ public class VisibilityEnhancer extends Plugin
       byte[] trans = m.getFaceTransparencies();
       if (trans == null || trans.length == 0) return;
 
-      // Cache based on the array instance itself to survive OSRS model pooling
       byte[] original = originalTransparencies.get(trans);
       if (original == null)
       {
@@ -792,8 +761,6 @@ public class VisibilityEnhancer extends Plugin
       for (int i = 0; i < trans.length; i++)
       {
          int origAlpha = original[i] & 0xFF;
-
-         // Preserves native transparencies (like Avernic) by only taking the most transparent value
          int combinedAlpha = Math.max(origAlpha, alpha);
 
          if ((trans[i] & 0xFF) != combinedAlpha)
@@ -810,11 +777,9 @@ public class VisibilityEnhancer extends Plugin
       byte[] trans = m.getFaceTransparencies();
       if (trans == null || trans.length == 0) return;
 
-      // Look up the exact array instance in the cache
       byte[] original = originalTransparencies.get(trans);
       if (original != null && original.length == trans.length)
       {
-         // Restore the exact original transparency values
          System.arraycopy(original, 0, trans, 0, original.length);
       }
    }
@@ -847,7 +812,6 @@ public class VisibilityEnhancer extends Plugin
       restoreOpacity(p);
       restoreClothing(p);
 
-      // Forces OSRS to delete the transparent cached model and rebuild it
       PlayerComposition comp = p.getPlayerComposition();
       if (comp != null)
       {
@@ -857,11 +821,9 @@ public class VisibilityEnhancer extends Plugin
 
    private void clearAllGhosting()
    {
-      // Pool everyone that was modified in any way (opacity OR clothing)
       Set<Player> allAffected = new HashSet<>(ghostedPlayers);
       allAffected.addAll(originalEquipmentMap.keySet());
 
-      // Explicitly add the local player to the cleanup set
       Player local = client.getLocalPlayer();
       if (local != null)
       {
@@ -878,8 +840,6 @@ public class VisibilityEnhancer extends Plugin
       myProjectiles.clear();
       customHitsplats.clear();
 
-      // Fix: Brute-force restore EVERY transparency array we ever touched.
-      // This catches despawned players and missing projectiles perfectly.
       for (Map.Entry<byte[], byte[]> entry : originalTransparencies.entrySet())
       {
          byte[] trans = entry.getKey();
