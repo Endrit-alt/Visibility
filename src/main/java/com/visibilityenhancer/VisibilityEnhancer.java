@@ -35,6 +35,9 @@ public class VisibilityEnhancer extends Plugin
    private static final int OVERRIDE_OPAQUE_DELAY_CYCLES = 2;
    private static final int OVERRIDE_CLEAR_DELAY_CYCLES = 2;
 
+   // Cap only for the expensive clothing-hiding path on other players
+   private static final int MAX_OTHERS_CLEAR_GROUND_PLAYERS = 8;
+
    @Inject
    private Client client;
 
@@ -88,6 +91,9 @@ public class VisibilityEnhancer extends Plugin
    private final List<Player> inRange = new ArrayList<>();
    private final Set<Player> currentInRange = new HashSet<>();
    private final Set<Player> noLongerGhosted = new HashSet<>();
+
+   // Which ghosted players are allowed to receive Others Clear Ground this tick
+   private final Set<Player> currentOthersClearGroundPlayers = new HashSet<>();
 
    private boolean wasActive = false;
 
@@ -433,6 +439,7 @@ public class VisibilityEnhancer extends Plugin
       overrideLastSeenCycle.remove(p);
       overrideForcedPlayers.remove(p);
       immunePlayers.remove(p);
+      currentOthersClearGroundPlayers.remove(p);
    }
 
    @Subscribe
@@ -468,7 +475,7 @@ public class VisibilityEnhancer extends Plugin
 
       if (ghostedPlayers.contains(p))
       {
-         if (config.othersClearGround())
+         if (config.othersClearGround() && currentOthersClearGroundPlayers.contains(p))
          {
             applyClothingFilter(p);
          }
@@ -555,6 +562,7 @@ public class VisibilityEnhancer extends Plugin
       inRange.clear();
       currentInRange.clear();
       noLongerGhosted.clear();
+      currentOthersClearGroundPlayers.clear();
 
       boolean ignoreFriends = config.ignoreFriends();
       int maxDist = config.proximityRange();
@@ -619,6 +627,29 @@ public class VisibilityEnhancer extends Plugin
          currentInRange.addAll(inRange);
       }
 
+      if (config.othersClearGround() && !currentInRange.isEmpty())
+      {
+         List<Player> clearGroundCandidates = new ArrayList<>(currentInRange);
+         clearGroundCandidates.sort((p1, p2) ->
+         {
+            LocalPoint lp1 = p1.getLocalLocation();
+            LocalPoint lp2 = p2.getLocalLocation();
+
+            if (lp1 == null || lp2 == null)
+            {
+               return 0;
+            }
+
+            int dist1 = Math.max(Math.abs(localX - lp1.getSceneX()), Math.abs(localY - lp1.getSceneY()));
+            int dist2 = Math.max(Math.abs(localX - lp2.getSceneX()), Math.abs(localY - lp2.getSceneY()));
+
+            return Integer.compare(dist1, dist2);
+         });
+
+         int cap = Math.min(MAX_OTHERS_CLEAR_GROUND_PLAYERS, clearGroundCandidates.size());
+         currentOthersClearGroundPlayers.addAll(clearGroundCandidates.subList(0, cap));
+      }
+
       int othersOpacity = getEffectiveOthersOpacity();
       boolean hideOthersClothes = config.othersClearGround();
 
@@ -633,7 +664,7 @@ public class VisibilityEnhancer extends Plugin
             restoreOpacity(p);
          }
 
-         if (hideOthersClothes)
+         if (hideOthersClothes && currentOthersClearGroundPlayers.contains(p))
          {
             applyClothingFilter(p);
          }
@@ -751,7 +782,7 @@ public class VisibilityEnhancer extends Plugin
          {
             if (selfOpacity < 100)
             {
-               applyModelAlpha(null, m, selfAlpha); // Null for non-player entities like projectiles
+               applyModelAlpha(null, m, selfAlpha);
             }
             else
             {
@@ -762,7 +793,7 @@ public class VisibilityEnhancer extends Plugin
          {
             if (othersOpacity < 100)
             {
-               applyModelAlpha(null, m, othersAlpha); // Null for non-player entities like projectiles
+               applyModelAlpha(null, m, othersAlpha);
             }
             else
             {
@@ -1092,26 +1123,22 @@ public class VisibilityEnhancer extends Plugin
 
       byte[] trans = model.getFaceTransparencies();
 
-      // A player is in their "base state" if they are not playing an animation or a graphic
       boolean isBaseState = (p.getAnimation() == -1 && p.getGraphic() == -1);
 
       if (isBaseState)
       {
-         // If they are in their base state and have no transparency array, they are immune.
          if (trans == null || trans.length == 0)
          {
             immunePlayers.add(p);
-            return; // Cannot apply opacity anyway
+            return;
          }
          else
          {
-            // They equipped something transparent, remove immunity
             immunePlayers.remove(p);
          }
       }
       else
       {
-         // If they are animating, but we previously flagged their base model as immune, skip them!
          if (immunePlayers.contains(p))
          {
             return;
@@ -1189,6 +1216,7 @@ public class VisibilityEnhancer extends Plugin
       overrideStartCycle.clear();
       overrideLastSeenCycle.clear();
       overrideForcedPlayers.clear();
+      currentOthersClearGroundPlayers.clear();
 
       for (Map.Entry<byte[], byte[]> entry : originalTransparencies.entrySet())
       {
