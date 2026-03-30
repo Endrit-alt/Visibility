@@ -110,7 +110,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 
 		// Thralls outlines
 		HighlightStyle thrallStyle = config.highlightThralls();
-		if (thrallStyle != HighlightStyle.NONE)
+		if (thrallStyle != HighlightStyle.NONE && !plugin.isPeekHeld())
 		{
 			Color thrallsColor = config.thrallsOutlineColor();
 
@@ -138,7 +138,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 
 		// Self outlines
 		HighlightStyle selfStyle = config.highlightSelf();
-		if (local != null && selfStyle != HighlightStyle.NONE)
+		if (local != null && selfStyle != HighlightStyle.NONE && !plugin.isPeekHeld())
 		{
 			Model localModel = local.getModel();
 			if (localModel == null || localModel.getOverrideAmount() == 0)
@@ -162,7 +162,7 @@ public class VisibilityEnhancerOverlay extends Overlay
 
 		// Others outlines
 		HighlightStyle othersStyle = config.highlightOthers();
-		if (othersStyle != HighlightStyle.NONE)
+		if (othersStyle != HighlightStyle.NONE && !plugin.isPeekHeld())
 		{
 			renderedTiles.clear();
 			boolean hideStacked = config.hideStackedOutlines();
