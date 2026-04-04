@@ -98,6 +98,7 @@ public class VisibilityEnhancer extends Plugin
    private final Set<Player> noLongerGhosted = new HashSet<>();
 
    private boolean wasActive = false;
+   private boolean criticalProjectileAliveThisFrame = false;
 
    private final HotkeyListener hotkeyListener = new HotkeyListener(() -> config.toggleHotkey())
    {
@@ -228,10 +229,12 @@ public class VisibilityEnhancer extends Plugin
    );
 
    private static final Set<Integer> BOSS_PROJECTILES = ImmutableSet.<Integer>builder()
-           .add(2206, 2228, 2242, 2243, 2224, 2225, 2241, 2137, 2138, 2266)
-           .add(1583, 1584, 1585, 1586, 1591, 1604, 1606, 1607, 1555, 1560, 1577, 1578)
+           .add(2206, 2208, 2228, 2242, 2243, 2224, 2225, 2241, 2137, 2138, 2266)
+           .add(1583, 1584, 1585, 1586, 1591, 1596, 1598, 1604, 1605, 1606, 1607, 1608, 1555, 1560, 1577, 1578)
            .add(1339, 1340, 1341, 1343, 1345, 1354, 1327, 1291)
            .add(2010, 2011, 1764)
+           .add(1577, 1578, 1568, 1569, 1375, 1376, 1377, 1378, 1379, 1380, 1380, 1580)    //TOB NEW
+           .add(1481, 2266, 2147, 2244, 2237, 2238) //TOA NEW
            .build();
 
    // ADD THIS: Whitelist for critical SpotAnims/Graphics (the visual effects themselves)
@@ -819,6 +822,19 @@ public class VisibilityEnhancer extends Plugin
 
       wasActive = true;
 
+      criticalProjectileAliveThisFrame = false;
+      if (isInCriticalBossRoom())
+      {
+         for (Projectile proj : client.getProjectiles())
+         {
+            if (BOSS_PROJECTILES.contains(proj.getId()))
+            {
+               criticalProjectileAliveThisFrame = true;
+               break;
+            }
+         }
+      }
+
       Player local = client.getLocalPlayer();
       if (local == null)
       {
@@ -848,7 +864,7 @@ public class VisibilityEnhancer extends Plugin
       final int STATE_RESTORE = 2;
       final int STATE_FORCE_OPAQUE = 3;
 
-      boolean skipProjectiles = isInCriticalBossRoom();
+      boolean skipProjectiles = criticalProjectileAliveThisFrame;
 
       if (!skipProjectiles)
       {
@@ -961,8 +977,8 @@ public class VisibilityEnhancer extends Plugin
 
       if (renderable instanceof Projectile && (peekHeld || config.hideOthersProjectiles()))
       {
-         // KILLSWITCH: Do not hide any projectiles in critical boss rooms
-         if (isInCriticalBossRoom())
+         // KILLSWITCH: Do not hide any projectiles in critical boss rooms if a dangerous projectile is active
+         if (criticalProjectileAliveThisFrame)
          {
             return true;
          }
