@@ -98,7 +98,9 @@ public class VisibilityEnhancer extends Plugin
    private final Set<Player> noLongerGhosted = new HashSet<>();
 
    private boolean wasActive = false;
-   private boolean criticalProjectileAliveThisFrame = false;
+
+   // Cache the region so we don't calculate it every single frame in shouldDraw
+   private int currentRegionId = -1;
 
    private final HotkeyListener hotkeyListener = new HotkeyListener(() -> config.toggleHotkey())
    {
@@ -167,6 +169,21 @@ public class VisibilityEnhancer extends Plugin
       }
    };
 
+   // Regions where projectile hiding is entirely disabled (killswitch replacement)
+   private static final Set<Integer> RESTRICTED_PROJECTILE_REGIONS = ImmutableSet.of(
+           12613, // ToB Maiden
+           13123, 13379, // ToB Sote
+           12612, // ToB Xarpus
+           12611, // ToB Verzik
+           14164, // ToA Kephri
+           15188, // ToA Ba-Ba
+           12889, // CoX Olm
+           11601, // Nex
+           9043,  // Inferno
+           5789, 6045, // Yama
+           14180  // Doom of Mokhaiotl
+   );
+
    private static final Set<Integer> EXEMPT_ANIMATIONS = ImmutableSet.<Integer>builder()
            .add(1378, 7642, 7643, 7514, 1062, 1203, 7644, 7640, 7638, 10172, 5062, 9168, 8104)
 
@@ -211,7 +228,7 @@ public class VisibilityEnhancer extends Plugin
 
            .add(AnimationID.HUNTER_LAY_BOXTRAP_BIRDSNARE, AnimationID.HUNTER_LAY_NETTRAP, AnimationID.HUNTER_LAY_MANIACAL_MONKEY_BOULDER_TRAP, AnimationID.HUNTER_CHECK_BIRD_SNARE)
 
-           .add(AnimationID.MAGIC_CHARGING_ORBS, AnimationID.MAGIC_MAKE_TABLET, AnimationID.MAGIC_ENCHANTING_JEWELRY, AnimationID.MAGIC_ENCHANTING_AMULET_1, AnimationID.MAGIC_ENCHANTING_AMULET_2, AnimationID.MAGIC_ENCHANTING_AMULET_3, AnimationID.MAGIC_ENCHANTING_BOLTS)
+           .add(AnimationID.MAGIC_CHARGING_ORBS, AnimationID.MAGICMAKE_TABLET, AnimationID.MAGIC_ENCHANTING_JEWELRY, AnimationID.MAGIC_ENCHANTING_AMULET_1, AnimationID.MAGIC_ENCHANTING_AMULET_2, AnimationID.MAGIC_ENCHANTING_AMULET_3, AnimationID.MAGIC_ENCHANTING_BOLTS)
            .add(AnimationID.MAGIC_LUNAR_SHARED, AnimationID.MAGIC_LUNAR_CURE_PLANT, AnimationID.MAGIC_LUNAR_PLANK_MAKE, AnimationID.MAGIC_LUNAR_STRING_JEWELRY, AnimationID.MAGIC_ARCEUUS_RESURRECT_CROPS)
            .add(AnimationID.BURYING_BONES, AnimationID.USING_GILDED_ALTAR, AnimationID.SACRIFICE_BLESSED_BONE_SHARDS)
            .add(AnimationID.ECTOFUNTUS_FILL_SLIME_BUCKET, AnimationID.ECTOFUNTUS_GRIND_BONES, AnimationID.ECTOFUNTUS_INSERT_BONES, AnimationID.ECTOFUNTUS_EMPTY_BIN)
@@ -228,18 +245,7 @@ public class VisibilityEnhancer extends Plugin
            NpcID.ARCEUUS_THRALL_GHOST_GREATER, NpcID.ARCEUUS_THRALL_SKELETON_GREATER, NpcID.ARCEUUS_THRALL_ZOMBIE_GREATER
    );
 
-   private static final Set<Integer> BOSS_PROJECTILES = ImmutableSet.<Integer>builder()
-           .add(2206, 2208, 2228, 2242, 2243, 2224, 2225, 2241, 2137, 2138, 2139, 2266)
-           .add(1583, 1584, 1585, 1586, 1591, 1596, 1598, 1604, 1605, 1606, 1607, 1608, 1555, 1560, 1577, 1578)
-           .add(1291, 1327, 1339, 1340, 1341, 1342, 1343, 1344, 1345, 1346, 1347, 1348, 1349, 1350, 1351, 1352, 1353, 1354, 1355, 1356, 1357, 1358, 1359, 1360, 1361, 1362, 1363, 1364, 1365, 1366, 1367, 1368)
-           .add(2010, 2011, 1764)
-           .add(1577, 1578, 1568, 1569, 1375, 1376, 1377, 1378, 1379, 1380, 1380, 1580)    //TOB NEW
-           .add(1481, 2266, 2147, 2204, 2206, 2208, 2225, 2244, 2237, 2238) //TOA NEW
-           .add(1375, 1376, 1377, 1378, 1379, 1380, 1381, 1382) //INFERNO
-           .add(3237, 3238, 3239, 3240, 3241, 3242, 3243, 3244, 3245, 3246, 3247, 3248, 3249, 3250, 3251, 3252, 3253, 3254, 3255, 3256, 3257, 3258, 3259, 3260, 3261, 3262, 3263, 3264, 3265, 3266, 3267, 3268, 3269, 3270, 3270, 3271, 3272, 3273, 3274, 3275, 3265, 3277, 3278, 3279, 3280, 3281)
-           .build();
-
-   // ADD THIS: Whitelist for critical SpotAnims/Graphics (the visual effects themselves)
+   // Whitelist for critical SpotAnims/Graphics (the visual effects themselves)
    private static final Set<Integer> CRITICAL_SPOTANIMS = ImmutableSet.<Integer>builder()
            //SpotanimID.java
            .add(2145, 2146, 317) //Kephri dung
@@ -249,7 +255,6 @@ public class VisibilityEnhancer extends Plugin
            .add(1604, 1605) //sotesegg
            .add (1997, 1998, 2002, 2003) //nex
            .add (2197, 2198, 2199, 2200, 2203) //wardens
-
            .build();
 
    @Getter
@@ -274,6 +279,7 @@ public class VisibilityEnhancer extends Plugin
       hotkeyHeld = false;
       peekHeld = false;
       wasActive = false;
+      currentRegionId = -1;
    }
 
    @Override
@@ -288,6 +294,7 @@ public class VisibilityEnhancer extends Plugin
 
       cachedLocalPlayer = null;
       wasActive = false;
+      currentRegionId = -1;
    }
 
    public boolean isActive()
@@ -369,7 +376,6 @@ public class VisibilityEnhancer extends Plugin
 
       return false;
    }
-
 
    @Subscribe
    public void onHitsplatApplied(HitsplatApplied event)
@@ -482,7 +488,6 @@ public class VisibilityEnhancer extends Plugin
       {
          for (Player p : ghostedPlayers)
          {
-            // FIX: Check if the graphic is critical before hiding it
             int currentGraphic = p.getGraphic();
             if (currentGraphic != -1 && !CRITICAL_SPOTANIMS.contains(currentGraphic))
             {
@@ -493,7 +498,6 @@ public class VisibilityEnhancer extends Plugin
             {
                for (ActorSpotAnim spotAnim : p.getSpotAnims())
                {
-                  // FIX: Check if the spot anim is critical before hiding it
                   if (!CRITICAL_SPOTANIMS.contains(spotAnim.getId()))
                   {
                      p.removeSpotAnim(spotAnim.getId());
@@ -725,8 +729,20 @@ public class VisibilityEnhancer extends Plugin
       if (local == null)
       {
          clearAllGhosting();
+         currentRegionId = -1;
          return;
       }
+
+      LocalPoint localLoc = local.getLocalLocation();
+      if (localLoc == null)
+      {
+         clearAllGhosting();
+         currentRegionId = -1;
+         return;
+      }
+
+      // Update cached region using fromLocalInstance to account for instanced raids
+      currentRegionId = WorldPoint.fromLocalInstance(client, localLoc).getRegionID();
 
       myProjectiles.removeIf(p -> client.getGameCycle() >= p.getEndCycle());
 
@@ -747,13 +763,6 @@ public class VisibilityEnhancer extends Plugin
       else if (originalEquipmentMap.containsKey(local))
       {
          restoreClothing(local);
-      }
-
-      LocalPoint localLoc = local.getLocalLocation();
-      if (localLoc == null)
-      {
-         clearAllGhosting();
-         return;
       }
 
       noLongerGhosted.clear();
@@ -789,16 +798,6 @@ public class VisibilityEnhancer extends Plugin
 
       wasActive = true;
 
-      criticalProjectileAliveThisFrame = false;
-      for (Projectile proj : client.getProjectiles())
-      {
-         if (BOSS_PROJECTILES.contains(proj.getId()))
-         {
-            criticalProjectileAliveThisFrame = true;
-            break;
-         }
-      }
-
       Player local = client.getLocalPlayer();
       if (local == null)
       {
@@ -826,9 +825,10 @@ public class VisibilityEnhancer extends Plugin
       final int STATE_OTHERS = 0;
       final int STATE_MINE = 1;
       final int STATE_RESTORE = 2;
-      final int STATE_FORCE_OPAQUE = 3;
 
-      boolean skipProjectiles = criticalProjectileAliveThisFrame;
+      boolean skipProjectiles = RESTRICTED_PROJECTILE_REGIONS.contains(currentRegionId)
+              || client.getPlayers().size() <= 1
+              || client.getVarbitValue(Varbits.IN_RAID) == 1;
 
       if (!skipProjectiles)
       {
@@ -847,18 +847,12 @@ public class VisibilityEnhancer extends Plugin
             }
 
             Actor target = proj.getInteracting();
-            boolean isBossProjectile = BOSS_PROJECTILES.contains(proj.getId());
             boolean isTargetingMeOrGround = (target == local || target == null);
             boolean isMine = myProjectiles.contains(proj);
 
             int currentState = arrayState.getOrDefault(trans, -1);
 
-            if (isBossProjectile)
-            {
-               arrayState.put(trans, STATE_FORCE_OPAQUE);
-               arrayToModel.put(trans, m);
-            }
-            else if (isTargetingMeOrGround)
+            if (isTargetingMeOrGround)
             {
                if (currentState < STATE_RESTORE)
                {
@@ -891,19 +885,7 @@ public class VisibilityEnhancer extends Plugin
          int state = entry.getValue();
          Model m = arrayToModel.get(trans);
 
-         if (state == STATE_FORCE_OPAQUE)
-         {
-            byte[] original = originalTransparencies.get(trans);
-            if (original == null)
-            {
-               originalTransparencies.put(trans, trans.clone());
-            }
-            for (int i = 0; i < trans.length; i++)
-            {
-               trans[i] = 0;
-            }
-         }
-         else if (state == STATE_RESTORE)
+         if (state == STATE_RESTORE)
          {
             restoreModelAlpha(m);
          }
@@ -941,19 +923,15 @@ public class VisibilityEnhancer extends Plugin
 
       if (renderable instanceof Projectile && (peekHeld || config.hideOthersProjectiles()))
       {
-         // KILLSWITCH: Do not hide any projectiles in critical boss rooms if a dangerous projectile is active
-         if (criticalProjectileAliveThisFrame)
+         // REGION CHECK: Disable projectile hiding completely in restricted boss rooms, solo instances, or anywhere in CoX
+         if (RESTRICTED_PROJECTILE_REGIONS.contains(currentRegionId)
+                 || client.getPlayers().size() <= 1
+                 || client.getVarbitValue(Varbits.IN_RAID) == 1)
          {
             return true;
          }
 
          Projectile proj = (Projectile) renderable;
-
-         if (BOSS_PROJECTILES.contains(proj.getId()))
-         {
-            return true;
-         }
-
          Actor target = proj.getInteracting();
          return target == null || target == cachedLocalPlayer || myProjectiles.contains(proj);
       }
