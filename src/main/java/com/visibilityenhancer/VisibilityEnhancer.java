@@ -101,6 +101,8 @@ public class VisibilityEnhancer extends Plugin
    private final List<Player> inRange = new ArrayList<>();
    private final Set<Player> currentInRange = new HashSet<>();
    private final Set<Player> noLongerGhosted = new HashSet<>();
+   private final Set<LocalPoint> occupiedTiles = new HashSet<>();
+
 
    private boolean wasActive = false;
    private boolean isSelfHidden = false; // Cached 0% self-opacity state
@@ -197,7 +199,26 @@ public class VisibilityEnhancer extends Plugin
 
    private static final Set<Integer> EXEMPT_ANIMATIONS = ImmutableSet.<Integer>builder()
            .add(1378, 7642, 7643, 7514, 1062, 1203, 7644, 7640, 7638, 10172, 5062, 9168, 8104)
-           .add(714) // Standard spellbook teleport
+           .add(714, 4069, 1500, 7040, 9131, 9286, 3945, 836, 2881, 4423) // Teleport animations
+           .add(687, 684, 681, 677, 678, 679, 674, 688, 689, 670, 691, 702, 699, 671, 669, 665, 666, 667, 655) //spells
+           .add(366, 367, 368, 369, 370, 371, 372, 373, 374, 375, 376, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386,
+                   387, 388, 389, 390, 391, 392, 393, 394, 395, 396, 397, 398, 399, 400, 401, 402, 403, 404, 405, 406, 407,
+                   408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418, 419, 420, 421, 422, 423, 424, 425, 426, 427, 428,
+                   429, 430, 431, 432, 433, 434, 435, 436, 437, 438, 439, 440, 420, 424, 426, 707, 708, 709, 710, 711, 712,
+                   713, 714, 715, 716, 717, 718, 719, 720, 721, 722, 723, 724, 725, 726, 727, 728, 729, 730, 731, 732, 733,
+                   734, 735, 736, 737, 738, 739, 740, 741, 742, 743, 744, 745, 746, 747, 748, 749, 750, 751, 752, 753, 754,
+                   755, 756, 757, 758, 759, 760, 761, 762, 763, 764, 765, 766, 767, 768, 769, 770, 771, 772, 773, 774, 775,
+                   776, 777, 778, 779, 780, 781, 782, 783, 784, 785, 786, 787, 788, 789, 790, 791, 792, 793, 794, 795, 796,
+                   797, 798, 799, 800, 801, 802, 803, 804, 805, 806, 807, 808, 809, 810, 811, 812, 813, 814, 815, 816, 817,
+                   818, 819, 820, 821, 822, 823, 824, 825, 826, 827, 828, 829, 830, 831, 832, 833, 834, 835, 836, 837, 838,
+                   839, 840, 841, 842, 843, 844, 845, 846, 847, 848, 849, 850, 851, 852, 853, 854, 855, 856, 857, 858, 859,
+                   860, 861, 862, 863, 864, 865, 866, 867, 868, 869, 870, 871, 872, 873, 874, 875, 876, 877, 878, 879, 880,
+                   881, 882, 883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 893, 894, 895, 896, 897, 898, 899, 900, 901,
+                   902, 903, 904, 905, 906, 907, 908, 909, 910, 911, 912, 913, 914, 1062, 4071, 4177, 4426, 4427, 4428, 4429,
+                   4462, 5061, 5063, 7642, 8457, 8458, 8459, 8460, 8461, 8462, 8463, 8464, 8465, 8466, 8467, 8468, 8469, 8470,
+                   8471, 8472, 8473, 8474, 8475, 8476, 8477, 8478, 8479, 8480, 8481, 8482, 8483, 8484, 8485, 8486, 8487, 8488,
+                   9848, 8970, 8972, 8973, 8974, 8975, 8976, 8977, 8978, 8979, 8980, 8981, 8982, 8983, 8985, 8987, 8993, 8995,
+                   8997, 8998, 8999, 9002, 9168, 9471, 9493, 9713, 9714, 9715, 9799, 11222, 11275, 12397) //opacity breakers
 
            .add(AnimationID.CONSUMING)
 
@@ -276,6 +297,7 @@ public class VisibilityEnhancer extends Plugin
            .add(1540,1900,2125,2903,2904,2905,2906,3018,3720,1455, 1458, 1461, 1464, 84,87,1543,1546,1719,1722) //casting
            .add(2059,2903,2904,2905,2906,3720,1250,1251)
            .add(2834,1205,1206,1207,1208,2804,1292,1171) //specs
+           .add(246,247,332,482,559,1577,56,451,715) //Teleport spotanims
            .build();
 
    @Getter
@@ -316,6 +338,9 @@ public class VisibilityEnhancer extends Plugin
       cachedLocalPlayer = null;
       wasActive = false;
       currentRegionId = -1;
+
+      // Clear our tile cache
+      occupiedTiles.clear();
    }
 
    public boolean isActive()
@@ -472,30 +497,7 @@ public class VisibilityEnhancer extends Plugin
       localPlayerExemptFromCull = false;
       if (cachedLocalPlayer != null)
       {
-         boolean hasGraphic = false;
-
-         // We still skip graphics if doing a skilling/teleport animation (EXEMPT_ANIMATIONS)
-         if (!isExemptAnimation(cachedLocalPlayer))
-         {
-            // Check the primary graphic slot
-            int currentGraphic = cachedLocalPlayer.getGraphic();
-            if (currentGraphic != -1 && !IGNORED_SELF_GRAPHICS.contains(currentGraphic))
-            {
-               hasGraphic = true;
-            }
-
-            if (!hasGraphic && cachedLocalPlayer.getSpotAnims() != null)
-            {
-               for (ActorSpotAnim spotAnim : cachedLocalPlayer.getSpotAnims())
-               {
-                  if (!IGNORED_SELF_GRAPHICS.contains(spotAnim.getId()))
-                  {
-                     hasGraphic = true;
-                     break;
-                  }
-               }
-            }
-         }
+         boolean hasGraphic = hasMeaningfulGraphics(cachedLocalPlayer);
 
          Model model = cachedLocalPlayer.getModel();
          boolean hasOverride = model != null && (model.getOverrideAmount() != 0 || overrideForcedPlayers.contains(cachedLocalPlayer));
@@ -815,6 +817,21 @@ public class VisibilityEnhancer extends Plugin
 
       updatePlayersInRange();
 
+      // --- Hide Stacked Players Logic ---
+      occupiedTiles.clear();
+      if (config.hideStackedOutlines())
+      {
+         for (Player p : currentInRange)
+         {
+            LocalPoint lp = p.getLocalLocation();
+            if (lp != null)
+            {
+               occupiedTiles.add(lp);
+            }
+         }
+      }
+      // ----------------------------------
+
       boolean hideOthersClothes = config.othersClearGround();
 
       for (Player p : currentInRange)
@@ -996,6 +1013,18 @@ public class VisibilityEnhancer extends Plugin
             }
          }
 
+         // --- Hide Stacked Players ---
+         // If they aren't the local player, aren't in the priority limit,
+         // and are standing on a tile occupied by a priority player, cull them.
+         if (player != cachedLocalPlayer && config.hideStackedOutlines() && !currentInRange.contains(player))
+         {
+            LocalPoint lp = player.getLocalLocation();
+            if (lp != null && occupiedTiles.contains(lp))
+            {
+               return false;
+            }
+         }
+
          // --- Others Fallback ---
          if (!drawingUI && fallbackHiddenPlayers.contains(player))
          {
@@ -1122,6 +1151,33 @@ public class VisibilityEnhancer extends Plugin
       wasActive = currentlyActive;
    }
 
+   private boolean hasMeaningfulGraphics(Player p)
+   {
+      if (p == null || isExemptAnimation(p))
+      {
+         return false;
+      }
+
+      int g = p.getGraphic();
+      if (g != -1 && !IGNORED_SELF_GRAPHICS.contains(g))
+      {
+         return true;
+      }
+
+      if (p.getSpotAnims() != null)
+      {
+         for (ActorSpotAnim s : p.getSpotAnims())
+         {
+            if (!IGNORED_SELF_GRAPHICS.contains(s.getId()))
+            {
+               return true;
+            }
+         }
+      }
+
+      return false;
+   }
+
    private boolean isExemptAnimation(Player player)
    {
       return player != null && EXEMPT_ANIMATIONS.contains(player.getAnimation());
@@ -1224,7 +1280,7 @@ public class VisibilityEnhancer extends Plugin
 
       byte[] trans = model.getFaceTransparencies();
       boolean hasTransparencyArray = trans != null && trans.length > 0;
-      boolean isBaseState = player.getAnimation() == -1 && player.getGraphic() == -1;
+      boolean isBaseState = player.getAnimation() == -1 && !hasMeaningfulGraphics(player);
 
       if (isBaseState)
       {
@@ -1475,7 +1531,7 @@ public class VisibilityEnhancer extends Plugin
 
       byte[] trans = model.getFaceTransparencies();
 
-      boolean isBaseState = (p.getAnimation() == -1 && p.getGraphic() == -1);
+      boolean isBaseState = p.getAnimation() == -1 && !hasMeaningfulGraphics(p);
 
       if (isBaseState)
       {
@@ -1573,6 +1629,9 @@ public class VisibilityEnhancer extends Plugin
       overrideStartCycle.clear();
       overrideLastSeenCycle.clear();
       overrideForcedPlayers.clear();
+
+      // Clear our tile cache
+      occupiedTiles.clear();
 
       for (Map.Entry<byte[], byte[]> entry : originalTransparencies.entrySet())
       {

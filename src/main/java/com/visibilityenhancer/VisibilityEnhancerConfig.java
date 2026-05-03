@@ -82,7 +82,7 @@ public interface VisibilityEnhancerConfig extends Config
 			section = proximityFadingSection,
 			description = "Scales opacity based on distance. Players near you use 'Others Opacity', fading to 100% further away."
 	)
-	default boolean distanceBasedOpacity() { return true; }
+	default boolean distanceBasedOpacity() { return false; }
 
 	@Range(min = 0, max = 25)
 	@ConfigItem(
@@ -92,7 +92,7 @@ public interface VisibilityEnhancerConfig extends Config
 			section = proximityFadingSection,
 			description = "Tiles away before players start losing transparency."
 	)
-	default int fadeStartDistance() { return 4; }
+	default int fadeStartDistance() { return 6; }
 
 	@Range(min = 1, max = 25)
 	@ConfigItem(
